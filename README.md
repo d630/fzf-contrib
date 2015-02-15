@@ -109,7 +109,7 @@ It is intended to use selected code snippets in a second directory, independent 
     `-- z1.bash
 ```
 
-Files are stored in `src` and will be manually loaded / hard linked into several `rc` subdirectories. `LINKS.txt` tracks all linking; it may be used if `fzf-custom` is a git repository and we need to relink into `rc` in a git hook post script.
+Files are stored in `src/` and will be manually loaded / hard linked into several `rc/` subdirectories. `LINKS.txt` tracks all linking; it may be used if `fzf-custom` is a git repository and we need to relink into `rc/` in a git hook post script.
 
 ### fzf-contrib(1) command
 
@@ -119,7 +119,7 @@ Files are stored in `src` and will be manually loaded / hard linked into several
 
 * Do `git clone https://github.com/D630/fzf-contrib.git`
 * Copy the shell script `fzf-contrib` elsewhere into `<PATH>`
-* `cd fzf-contrib && ./fzf-contrib init`
+* `cd fzf-contrib/ && ./fzf-contrib init`
 
 Explicitly required:
 - sh-compatible Shell like `dash`(1) or something similar
@@ -177,7 +177,7 @@ FZF_CONTRIB_DIR
 
 #### Examples
 
-To initialize `fzf-custom` and add new snippets to `fzf-custom/src`:
+To initialize `fzf-custom/` and add new snippets to `fzf-custom/src/`:
 
 ```
 % cd fzf-contrib/
@@ -200,7 +200,7 @@ Edit `z.bash`:
 
 ```
 % cd
-% ls ~/share/fzf-custom
+% ls ~/share/fzf-custom/
 > INFO.csv  rc  src
 % <EDITOR> ~/share/fzf-custom/src/z.bash
 ```
@@ -228,7 +228,7 @@ Load `kill-process.sh` based on shebang. Since `bash`(1), `mksh`(1) and `zsh`(1)
 > Create '/home/user1/share/fzf-custom/src/kill-process.sh' -> '/home/user1/share/fzf-custom/rc/zsh/kill-process.sh'
 ```
 
-Unload/Remove `kill-process.sh` from `fzf-custom/rc/{mksh,zsh}`:
+Unload/Remove `kill-process.sh` from `fzf-custom/rc/{mksh,zsh}/`:
 
 ```
 % fzf-contrib uload kill-process.sh a=mksh,zsh
@@ -236,21 +236,21 @@ Unload/Remove `kill-process.sh` from `fzf-custom/rc/{mksh,zsh}`:
 > Remove '/home/user1/share/fzf-custom/src/kill-process.sh' -> '/home/user1/share/fzf-custom/rc/zsh/kill-process.sh'
 ```
 
-Load `kill-process.sh` into `fzf-custom/rc/mksh`:
+Load `kill-process.sh` into `fzf-custom/rc/mksh/`:
 
 ```
 % fzf-contrib load kill-process.sh a=mksh
 > Create '/home/user1/share/fzf-custom/src/kill-process.sh' -> '/home/user1/share/fzf-custom/rc/mksh/kill-process.sh'
 ```
 
-Load `kill-process.sh` into `fzf-custom/rc/zsh` and rename it into `KILL.zsh`:
+Load `kill-process.sh` into `fzf-custom/rc/zsh/` and rename it into `KILL.zsh`:
 
 ```
 % fzf-contrib load kill-process.sh a=zsh d=KILL.zsh
 > Create '/home/user1/share/fzf-custom/src/kill-process.sh' -> '/home/user1/share/fzf-custom/rc/zsh/KILL.zsh'
 ```
 
-Unload/Remove all links inside `fzf-custom/rc`:
+Unload/Remove all links inside `fzf-custom/rc/`:
 
 ```
 % fzf-contrib uload
@@ -265,7 +265,7 @@ Unload/Remove all links inside `fzf-custom/rc`:
 
 #### Using selected code snippets
 
-Source the scripts inside `fzf-custom/rc/<APP>` into your configuration file. For example, you may put the following into `.bashrc`:
+Source the scripts inside `fzf-custom/rc/<APP>/` into your configuration file. For example, you may put the following into `.bashrc`:
 
 ```sh
 declare snippet=
