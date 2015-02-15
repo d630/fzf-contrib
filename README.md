@@ -57,9 +57,9 @@ tags
 description
 ```
 
-#### fzf-custom dir/repo
+#### fzf-custom dir
 
-It is intended to use selected code snippets in a second directory, independent from `fzf-contrib`(5) repo. The environment variable `FZF_CONTRIB_DIR` points to `${XDG_DATA_HOME:-${HOME}/.local/share}/fzf-custom` by default:
+It is intended to use selected code snippets in a second directory, independent from the `fzf-contrib` repo. The environment variable `FZF_CONTRIB_DIR` points to `${XDG_DATA_HOME:-${HOME}/.local/share}/fzf-custom` by default:
 
 ```
 # tree  -a -P "*" -n --noreport -L 20 --charset=ascii "$PWD"
@@ -111,7 +111,7 @@ It is intended to use selected code snippets in a second directory, independent 
 
 Files are stored in `src` and will be manually loaded / hard linked into several `rc` subdirectories. `LINKS.txt` tracks all linking; it may be used if `fzf-custom` is a git repository and we need to relink into `rc` in a git hook post script.
 
-### `fzf-contrib`(1) command
+### fzf-contrib(1) command
 
 `fzf-contrib`(1) follows the Shell and Utilities portion of the POSIX specification. It is written to copy files from `fzf-contrib` to `fzf-custom` and to maintain several code snippets inside `fzf-custom`.
 
@@ -177,7 +177,7 @@ FZF_CONTRIB_DIR
 
 #### Examples
 
-To initialize `fzf-custom` and add new snippets to `fzf-contrib/src`:
+To initialize `fzf-custom` and add new snippets to `fzf-custom/src`:
 
 ```
 % cd fzf-contrib/
