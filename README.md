@@ -1,4 +1,4 @@
-## fzf-contrib v0.1.0beta [MIT]
+## fzf-contrib
 
 `fzf-contrib`(1) stores and organizes useful code snippets around the general-purpose fuzzy finder [fzf](https://github.com/junegunn/fzf).
 
@@ -59,7 +59,7 @@ description
 
 #### fzf-custom dir
 
-It is intended to use selected code snippets in a second directory, independent from the `fzf-contrib` repo. The environment variable `FZF_CONTRIB_DIR` points to `${XDG_DATA_HOME:-${HOME}/.local/share}/fzf-custom` by default:
+It is intended to use selected code snippets in a second directory, independently from the `fzf-contrib` repo. The environment variable `FZF_CONTRIB_DIR` points to `${XDG_DATA_HOME:-${HOME}/.local/share}/fzf-custom` by default:
 
 ```
 # tree  -a -P "*" -n --noreport -L 20 --charset=ascii "$PWD"
@@ -109,7 +109,7 @@ It is intended to use selected code snippets in a second directory, independent 
     `-- z1.bash
 ```
 
-Files are stored in `src/` and will be manually loaded / hard linked into several `rc/` subdirectories. `LINKS.txt` tracks all linking; it may be used if `fzf-custom` is a git repository and we need to relink into `rc/` in a git hook post script.
+Files are stored in `src/` and will be manually loaded (hard linked) into several `rc/` subdirectories. `LINKS.txt` tracks all linking; it may be used if `fzf-custom` is a git repository and we need to relink into `rc/` in a git hook post script.
 
 ### fzf-contrib(1) command
 
@@ -121,33 +121,18 @@ Files are stored in `src/` and will be manually loaded / hard linked into severa
 * Copy the shell script `fzf-contrib` elsewhere into `<PATH>`
 * `cd fzf-contrib/ && ./fzf-contrib init`
 
-Explicitly required:
-- sh-compatible Shell like `dash`(1) or something similar
-- `cat`(1)
-- `cp`(1)
-- `find`(1)
-- `grep`(1)
-- `ln`(1)
-- `ls`(1)
-- `mkdir`(1)
-- `rm`(1)
-- `sed`(1)
-- `touch`(1)
-- `tr`(1)
-
 #### Help
 
 ```
-fzf-contrib v0.1.0beta
-usage: fzf-contrib <subcommand> [<arguments>]
+Usage: fzf-contrib [add|help|info|init|load|reload|uload|version]
 
 Subcommands:
-add <src> [d=<dest>]            Copy a src file from <fzf-contrib/src> to
-                                <FZF_CONTRIB_DIR/src>
+add <src> [d=<dest>]            Force a copy of a src file from
+                                <FZF_CONTRIB_ROOT/src> to <FZF_CONTRIB_DIR/src>
 help                            Show this instruction
 info [<pattern>]                Output records from INFO.csv
-init                            Initialize src dir from the <fzf-contrib>
-                                repo; copy its contents to
+init                            Initialize local src dir from the
+                                <FZF_CONTRIB_ROOT/src>; copy its contents to
                                 <FZF_CONTRIB_DIR/src>
 load <src> [a=<app>] [d=<dest>] Hard link a src file from
                                 <FZF_CONTRIB_DIR/src> into
@@ -157,7 +142,6 @@ reload                          Remove all hardlinks in <FZF_CONTRIB_DIR/rc>
                                 Use this command in a hook script like
                                 <.git/hooks/post-merge>
 uload [<src>] [a=<app>]         Remove hard link from <FZF_CONTRIB_DIR/rc>
-version                         Print version
 
 Arguments:
 <app>                           Name of application and subdirectory in
@@ -166,13 +150,11 @@ Arguments:
 <dest>                          New name of the current script in
                                 <FZF_CONTRIB_DIR/rc>
 <pattern>                       Grep BRE pattern
-<src>                           Basename of the script in the current
-                                src dir
+<src>                           Basename of the script in the current src dir
 
 Environment variables:
 FZF_CONTRIB_DIR
     ${XDG_DATA_HOME:-${HOME}/.local/share}/fzf-custom
-
 ```
 
 #### Examples
@@ -269,7 +251,7 @@ Source the scripts inside `fzf-custom/rc/<APP>/` into your configuration file. F
 
 ```sh
 declare snippet=
-for snippet in "${FZF_CONTRIB_DIR}"/rc/bash/*
+for snippet in "${FZF_CONTRIB_DIR}"/rc/bash/?*
 do
     source "$snippet"
 done
@@ -281,9 +263,12 @@ unset -v snippet
 - better `fzf-contrib info`
 - update `INFO.csv` after `fzf-contrib load` and `fzf-contrib uload`
 - nicer names of arguments
-- determine wheater the current directory is a .git repo and/or `fzf-contrib`
 - example how to use `fzf-contrib reload`
 
 ### Bugs & Requests
 
 Report it on https://github.com/D630/fzf-contrib/issues
+
+### LICENCE
+
+MIT

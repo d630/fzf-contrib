@@ -5,61 +5,74 @@
 
 # -- CONFIG.
 
-readonly version="0.1.0beta"
-readonly shells_sh="bash,mksh,zsh"
-readonly applications="${shells_sh},fish,tmux,vim" # See func __fzf_contrib_load()
+set -e
+set -u
+readonly shells_sh="bash mksh zsh"
+readonly applications="${shells_sh} fish tmux vim" # See func __fzf_contrib_load()
 export LC_COLLATE="C"
 
 # -- FUNCTIONS.
 
-__fzf_contrib_add ()
+die ()
 {
-    __fzf_contrib_check_source_file "${PWD}/src/${1}"
-
-    local \
-        arg= \
-        dest= \
-        src="$1"
-
-    for arg
-    do
-        case "$arg" in
-            d=?*)
-                dest="${arg#d=}"
-        esac
-        shift 1
-    done
-
-
-    if [ -d "${PWD}/.git" ]
-    then
-        command cp -i "${PWD}/src/${src}" "${FZF_CONTRIB_DIR}/src/${dest:-${src}}" && \
-            printf "Copy '%s' -> '%s'\n" "${PWD}/src/${src}" "${FZF_CONTRIB_DIR}/src/${dest:-${src}}" 1>&2
-    else
-        { printf '%s\n' "${0}:Error:85: Not a git repository" 1>&2 ; exit 85 ; }
-    fi
+        printf "${0}/error/%s: %s\n" "$1" "$2" 1>&2;
+        exit "$1"
 }
 
-__fzf_contrib_check_source_dir () { [ -d "$1" ] ; }
-
-__fzf_contrib_check_source_file ()
+msg ()
 {
-    [ -f "$1" ] || \
-        { printf '%s\n' "${0}:Error:80: File is missing: '${1}'" 1>&2 ; exit 80 ; }
+        printf "${0}: %s\n" "$*" 1>&2;
 }
 
-__fzf_contrib_help ()
+fzf_contrib__add ()
 {
-    printf '%s\n' "fzf-contrib v$(__fzf_contrib_version)
-usage: fzf-contrib <subcommand> [<arguments>]
+        local \
+                arg \
+                dest \
+                src="${1:? argument missing}";
+
+        for arg
+        do
+                case "$arg" in
+                d=?*)
+                        readonly dest="${arg#d=}"
+                esac
+                shift 1
+        done
+
+        if
+                test -d "${FZF_CONTRIB_ROOT}/.git" &&
+                GIT_DIR="${FZF_CONTRIB_ROOT}/.git" \
+                GIT_WORK_TREE="$FZF_CONTRIB_ROOT" \
+                        command git rev-parse --git-dir 1>/dev/null 2>&1;
+        then
+                msg "Copying '${FZF_CONTRIB_ROOT}/src/${src}' -> '${FZF_CONTRIB_DIR}/src/${dest:-${src}}'"
+                GIT_DIR="${FZF_CONTRIB_ROOT}/.git" \
+                GIT_WORK_TREE="$FZF_CONTRIB_ROOT" \
+                        command git ls-files "src/${src}" \
+                        | {
+                                IFS= read -r s;
+                                command cp -fp \
+                                        "${FZF_CONTRIB_ROOT}/${s}" \
+                                        "${FZF_CONTRIB_DIR}/src/${dest:-${src}}"
+                        }
+        else
+                die 84 "not a git repository/worktree: '${FZF_CONTRIB_ROOT}'"
+        fi
+}
+
+fzf_contrib__help ()
+{
+        fzf_contrib__usage
+        command cat <<'HELP'
 
 Subcommands:
-add <src> [d=<dest>]            Copy a src file from <fzf-contrib/src> to
-                                <FZF_CONTRIB_DIR/src>
+add <src> [d=<dest>]            Force a copy of a src file from
+                                <FZF_CONTRIB_ROOT/src> to <FZF_CONTRIB_DIR/src>
 help                            Show this instruction
 info [<pattern>]                Output records from INFO.csv
-init                            Initialize src dir from the <fzf-contrib>
-                                repo; copy its contents to
+init                            Initialize local src dir from the
+                                <FZF_CONTRIB_ROOT/src>; copy its contents to
                                 <FZF_CONTRIB_DIR/src>
 load <src> [a=<app>] [d=<dest>] Hard link a src file from
                                 <FZF_CONTRIB_DIR/src> into
@@ -69,7 +82,6 @@ reload                          Remove all hardlinks in <FZF_CONTRIB_DIR/rc>
                                 Use this command in a hook script like
                                 <.git/hooks/post-merge>
 uload [<src>] [a=<app>]         Remove hard link from <FZF_CONTRIB_DIR/rc>
-version                         Print version
 
 Arguments:
 <app>                           Name of application and subdirectory in
@@ -78,252 +90,338 @@ Arguments:
 <dest>                          New name of the current script in
                                 <FZF_CONTRIB_DIR/rc>
 <pattern>                       Grep BRE pattern
-<src>                           Basename of the script in the current
-                                src dir
+<src>                           Basename of the script in the current src dir
 
 Environment variables:
 FZF_CONTRIB_DIR
-    \${XDG_DATA_HOME:-\${HOME}/.local/share}/fzf-custom
-"
-}
+    ${XDG_DATA_HOME:-${HOME}/.local/share}/fzf-custom
+HELP
 
-__fzf_contrib_info ()
+} 1>&2
+
+fzf_contrib__info ()
 {
-    if [ -f "${PWD}/INFO.csv" ]
-    then
-        local info_file="${PWD}/INFO.csv"
-    elif [ -f "${FZF_CONTRIB_DIR}/INFO.csv" ]
-    then
-        local info_file="${FZF_CONTRIB_DIR}/INFO.csv"
-    else
-        { printf '%s\n' "${0}:Error:86: Could not locate INFO.csv" 1>&2 ; return 86 ; }
-    fi
+        local \
+                apps \
+                desc \
+                expr \
+                info_file \
+                name \
+                tags;
 
-    local \
-        apps= \
-        desc= \
-        name= \
-        tags=
+        : "${expr:=${1:? grep pattern missing}}"
 
-    command grep -e "$1" "$info_file" | \
-    while IFS="|" read -r name apps tags desc
-    do
-        printf "NAME  %s\nAPPS  %s\nTAGS  %s\nDESC  %s\n\n" "$name" "$apps" "$tags" "$desc"
-    done
-}
+        if
+                test -f "${FZF_CONTRIB_ROOT}/INFO.csv"
+        then
+                info_file="${PWD}/INFO.csv"
+        elif
+                test -f "${FZF_CONTRIB_DIR}/INFO.csv"
+        then
+                info_file="${FZF_CONTRIB_DIR}/INFO.csv"
+        else
+                die 86 "could not locate an INFO.csv"
+        fi
 
-__fzf_contrib_init ()
-if __fzf_contrib_check_source_dir "${FZF_CONTRIB_DIR}/src"
-then
-    { printf '%s\n' "${0}:Error:83: Dir exists: '${FZF_CONTRIB_DIR}/src'" 1>&2 ; return 83 ; }
-elif [ -d "${PWD}/.git" ] && __fzf_contrib_check_source_dir "${PWD}/src"
-then
-    local src=
-    command mkdir -p "${FZF_CONTRIB_DIR}/src" && \
-        printf "Create '%s'\n" "${FZF_CONTRIB_DIR}/src" 1>&2
-    command cp -i "${PWD}/INFO.csv" "${FZF_CONTRIB_DIR}/INFO.csv" && \
-        printf "Copy '%s' -> '%s'\n" "${PWD}/INFO.csv" "${FZF_CONTRIB_DIR}/INFO.csv" 1>&2
-    for src in "${PWD}"/src/*
-    do
-        command cp -i "$src" "${FZF_CONTRIB_DIR}/src/${src##*/}" && \
-            printf "Copy '%s' -> '%s'\n" "$src" "${FZF_CONTRIB_DIR}/src/${src##*/}" 1>&2
-    done
-    return "$?"
-else
-    { printf '%s\n' "${0}:Error:84: Not a git repository, or src dir missing" 1>&2 ; return 84 ; }
-fi
+        msg "Using info file '${info_file}'"
 
-__fzf_contrib_load ()
-{
-    __fzf_contrib_check_source_file "${FZF_CONTRIB_DIR}/src/${1}"
-
-    local \
-        apps= \
-        arg= \
-        dest= \
-        src="$1"
-
-    for arg
-    do
-        case "$arg" in
-            d=?*)
-                dest="${arg#d=}"
-                ;;
-            a=?*)
-                apps="${arg#a=}"
-        esac
-        shift 1
-    done
-
-    exec 3>>"${FZF_CONTRIB_DIR}/LINKS.txt"
-
-    local rc=
-    if [ -n "$dest" -a -n "$apps" ]
-    then
-        for rc in $(printf '%s' "$apps" | command tr ',' ' ')
-        do
-            command ln "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${rc}/${dest}" 1>&2 && \
-                printf '%s\n' "command ln \"\${GIT_DIR}/src/${src}\" \"\${GIT_DIR}/rc/${rc}/${dest}\"" 1>&3 && \
-                printf "Create '%s' -> '%s'\n" "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${rc}/${dest}" 1>&2
-        done
-    elif [ -z "$dest" -a -n "$apps" ]
-    then
-        for rc in $(printf '%s' "$apps" | command tr ',' ' ')
-        do
-            command ln "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${rc}/${src}" 1>&2 && \
-                printf '%s\n' "command ln \"\${GIT_DIR}/src/${src}\" \"\${GIT_DIR}/rc/${rc}/${src}\"" 1>&3 && \
-                printf "Create '%s' -> '%s'\n" "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${rc}/${src}" 1>&2
-        done
-    else
-        local shebang=
-        read -r _ shebang < "${FZF_CONTRIB_DIR}/src/${src}"
-        case "$shebang" in
-            sh)
-                for rc in $(printf '%s' "$shells_sh" | command tr ',' ' ')
+        command grep -e "$1" "$info_file" \
+        | {
+                while
+                        IFS='|' read -r name apps tags desc
                 do
-                    command ln "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${rc}/${dest:-${src}}" 1>&2 && \
-                        printf '%s\n' "command ln \"\${GIT_DIR}/src/${src}\" \"\${GIT_DIR}/rc/${rc}/${dest:-${src}}\"" 1>&3 && \
-                        printf "Create '%s' -> '%s'\n" "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${rc}/${dest:-${src}}" 1>&2
+                        printf "NAME  %s\nAPPS  %s\nTAGS  %s\nDESC  %s\n\n" "$name" "$apps" "$tags" "$desc"
                 done
-                ;;
-            bash|fish|mksh|tmux|vim|zsh)
-                command ln "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${shebang}/${dest:-${src}}" 1>&2 && \
-                    printf '%s\n' "command ln \"\${GIT_DIR}/src/${src}\" \"\${GIT_DIR}/rc/${shebang}/${dest:-${src}}\"" 1>&3 && \
-                    printf "Create '%s' -> '%s'\n" "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${shebang}/${dest:-${src}}" 1>&2
-                ;;
-            *)
-                { printf '%s\n' "${0}:Error:81: Unknown shebang: '${shebang}'" 1>&2 ; return 81 ; }
-        esac
-    fi
+        }
 }
 
-__fzf_contrib_main ()
-{
-    local predir_datadir="${XDG_DATA_HOME:-${HOME}/.local/share}"
-    local FZF_CONTRIB_DIR="${FZF_CONTRIB_DIR:-${predir_datadir}/fzf-custom}"
-
-    case "$1" in
-        init)       __fzf_contrib_init ; exit "$?"                  ;;
-        help)       __fzf_contrib_help ; exit "$?"                  ;;
-        info)       shift 1 ; __fzf_contrib_info "$@" ; exit "$?"   ;;
-        version)    __fzf_contrib_version ; exit "$?"               ;;
-        *)          __fzf_contrib_prepare
-    esac
-
-    case "$1" in
-        add)            shift 1 ; __fzf_contrib_add  "$@"   ;;
-        load)           shift 1 ; __fzf_contrib_load "$@"   ;;
-        reload)         __fzf_contrib_reload                ;;
-        uload|unload)   shift 1 ; __fzf_contrib_unload "$@" ;;
-        *)              __fzf_contrib_usage
-    esac
-
-    local err="$?"
-    exec 3<&-
-    exit "$err"
-}
-
-__fzf_contrib_prepare ()
-{
-    __fzf_contrib_check_source_dir "${FZF_CONTRIB_DIR}/src" || { printf '%s\n' "${0}:Error:79: Dir is missing: '${FZF_CONTRIB_DIR}/src'. Please cd into git repo 'fzf-contrib' and run 'fzf-contrib init'" 1>&2 ; exit 79 ; }
-
-    local rc=
-
-    for rc in $(printf '%s' "$applications" | command tr ',' ' ')
-    do
-        { command mkdir -p "${FZF_CONTRIB_DIR}/rc/${rc}" ; command touch "${FZF_CONTRIB_DIR}/rc/${rc}/.gitkeep" ; } &
-    done
-
-    wait
-
-    command touch "${FZF_CONTRIB_DIR}/rc/.gitkeep"
-}
-
-__fzf_contrib_reload ()
-if [ -f "${FZF_CONTRIB_DIR}/LINKS.txt" -a -d "${FZF_CONTRIB_DIR}/.git" ]
+fzf_contrib__init ()
+if
+        test -d "${FZF_CONTRIB_DIR}/src"
 then
-    __fzf_contrib_unload_all
-    local line=
-    while read -r line
-    do
-        $line && \
-        echo "$line"
-    done < "${FZF_CONTRIB_DIR}/LINKS.txt"
-    #. "${FZF_CONTRIB_DIR}/LINKS.txt"
+        die 83 "dir exists: '${FZF_CONTRIB_DIR}/src'"
+elif
+        test -d "${FZF_CONTRIB_ROOT}/.git" &&
+        GIT_DIR="${FZF_CONTRIB_ROOT}/.git" \
+        GIT_WORK_TREE="$FZF_CONTRIB_ROOT" \
+                command git rev-parse --git-dir 1>/dev/null 2>&1;
+then
+        msg "Creating '${FZF_CONTRIB_DIR}'"
+        command mkdir -p "$FZF_CONTRIB_DIR"
+        msg "Copying '${FZF_CONTRIB_ROOT}/INFO.csv' -> '${FZF_CONTRIB_DIR}/INFO.csv'"
+        command cp -i "${FZF_CONTRIB_ROOT}/INFO.csv" "${FZF_CONTRIB_DIR}/INFO.csv"
+        msg "Copying '${FZF_CONTRIB_ROOT}/src/' -> '${FZF_CONTRIB_DIR}/src/'"
+        GIT_DIR="${FZF_CONTRIB_ROOT}/.git" \
+        GIT_WORK_TREE="$FZF_CONTRIB_ROOT" \
+                command git ls-files src \
+                | command xargs -I '{}' install -D '{}' "${FZF_CONTRIB_DIR}/{}"
 else
-    { printf '%s\n' "${0}:Error:87: Files missing: LINKS.txt or .git" 1>&2 ; return 87 ; }
+        die 84 "not a git repository/worktree: '${FZF_CONTRIB_ROOT}'"
 fi
 
-__fzf_contrib_unload_all ()
+fzf_contrib__load ()
 {
-    local rc=
-    for rc in $(command find -H "${FZF_CONTRIB_DIR}/rc" -type f -links +1 -print)
-    do
-        command rm "$rc" 1>&2 && \
-            printf "Remove '%s'\n" "$rc" 1>&2
-    done
+        local \
+                apps= \
+                arg \
+                dest= \
+                rc \
+                shebang \
+                src="${1:? argument missing}";
+
+        for arg
+        do
+                case "$arg" in
+                d=?*)
+                        readonly dest="${arg#d=}"
+                ;;
+                a=?*)
+                        readonly apps="${arg#a=}"
+                esac
+                shift 1
+        done
+
+        exec 9>>"${FZF_CONTRIB_DIR}/LINKS.txt"
+
+        if
+                test -n "$dest" -a -n "$apps"
+        then
+                for rc in $(IFS=, ; printf '%s ' ${apps})
+                do
+                        msg "Linking '${FZF_CONTRIB_DIR}/src/${src}' -> '${FZF_CONTRIB_DIR}/rc/${rc}/${dest}'"
+                        command ln -f "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${rc}/${dest}"
+                        printf '%s\n' "command ln -f \"\${GIT_DIR}/src/${src}\" \"\${GIT_DIR}/rc/${rc}/${dest}\"" 1>&9;
+                done
+        elif
+                test -z "$dest" -a -n "$apps"
+        then
+                for rc in $(IFS=, ; printf '%s ' ${apps})
+                do
+                        msg "Linking '${FZF_CONTRIB_DIR}/src/${src}' -> '${FZF_CONTRIB_DIR}/rc/${rc}/${src}'"
+                        command ln -f "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${rc}/${src}"
+                        printf '%s\n' "command ln -f \"\${GIT_DIR}/src/${src}\" \"\${GIT_DIR}/rc/${rc}/${src}\"" 1>&9;
+                done
+        else
+                read -r _ shebang < "${FZF_CONTRIB_DIR}/src/${src}";
+                case "$shebang" in
+                sh)
+                        for rc in ${shells_sh}
+                        do
+                                msg "Linking '${FZF_CONTRIB_DIR}/src/${src}' -> '${FZF_CONTRIB_DIR}/rc/${rc}/${dest:-${src}}'"
+                                command ln -f "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${rc}/${dest:-${src}}"
+                                printf '%s\n' "command ln -f \"\${GIT_DIR}/src/${src}\" \"\${GIT_DIR}/rc/${rc}/${dest:-${src}}\"" 1>&9;
+                        done
+                ;;
+                bash|fish|mksh|tmux|vim|zsh)
+                        msg "Linking '${FZF_CONTRIB_DIR}/src/${src}' -> '${FZF_CONTRIB_DIR}/rc/${shebang}/${dest:-${src}}'"
+                        command ln -f "${FZF_CONTRIB_DIR}/src/${src}" "${FZF_CONTRIB_DIR}/rc/${shebang}/${dest:-${src}}"
+                        printf '%s\n' "command ln -f \"\${GIT_DIR}/src/${src}\" \"\${GIT_DIR}/rc/${shebang}/${dest:-${src}}\"" 1>&9;
+                ;;
+                *)
+                        die 81 "unknown shebang: '${shebang}'"
+                esac
+        fi
+
+        exec 9<&-
 }
 
-__fzf_contrib_unload ()
+fzf_contrib__main ()
 {
-    if [ "$#" -ne 0 ]
-    then
-        __fzf_contrib_check_source_file "${FZF_CONTRIB_DIR}/src/${1}"
-    else
-        command rm -i "${FZF_CONTRIB_DIR}/LINKS.txt" && \
-            printf "Remove '%s'\n" "${FZF_CONTRIB_DIR}/LINKS.txt" 1>&2 && \
-            __fzf_contrib_unload_all
-        return "$?"
-    fi
+        local \
+                FZF_CONTRIB_DIR \
+                FZF_CONTRIB_ROOT;
 
-    local \
-        apps= \
-        arg= \
-        inode_rc= \
-        inode_src="$(command ls -i "${FZF_CONTRIB_DIR}/src/${1}")" \
-        rc= \
-        rcc= \
-        src="$1"
+        FZF_CONTRIB_DIR="${FZF_CONTRIB_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/fzf-custom}"
+        FZF_CONTRIB_ROOT="$(
+                rl="$(command readlink -fn -- "$0")";
+                command dirname -- "$rl"
+        )"
 
-    inode_src="${inode_src%% *}"
+        readonly \
+                FZF_CONTRIB_DIR \
+                FZF_CONTRIB_ROOT;
 
-    for arg
-    do
-        case "$arg" in
-            a=?*) apps="${arg#a=}"
+        case "$1" in
+        help|init|version)
+                "fzf_contrib__${1}"
+                exit "$?"
+        ;;
+        info)
+                shift 1
+                fzf_contrib__info "$@"
+                exit "$?"
+        ;;
+        *)
+                fzf_contrib__prepare
         esac
-        shift 1
-    done
 
-    if [ -n "$apps" ]
-    then
-        for rc in $(printf '%s' "$apps" | command tr ',' ' ')
-        do
-            for rcc in $(command find -H "${FZF_CONTRIB_DIR}/rc/${rc}" -type f -links +1 -print)
-            do
-                inode_rc="$(command ls -i "$rcc")"
-                [ "$inode_src" -eq "${inode_rc%% *}" ] && command rm "$rcc" 1>&2 && {
-                    command sed "/^.* \"\${GIT_DIR}[/]rc.[^/]*[/]${rcc##*/}\"$/d" "${FZF_CONTRIB_DIR}/LINKS.txt" > "/tmp/${$}.${inode_rc%% *}"
-                    command cat "/tmp/${$}.${inode_rc%% *}" > "${FZF_CONTRIB_DIR}/LINKS.txt"
-                } && printf "Remove '%s' -> '%s'\n" "${FZF_CONTRIB_DIR}/src/${src}" "$rcc" 1>&2
-            done
-        done
-    else
-        for rc in $(command find -H "${FZF_CONTRIB_DIR}/rc" -type f -links +1 -print)
-        do
-            inode_rc="$(command ls -i "$rc")"
-            [ "$inode_src" -eq "${inode_rc%% *}" ] && command rm "$rc" 1>&2 && {
-                    command sed "/^.* \"\${GIT_DIR}[/]rc.[^/]*[/]${rc##*/}\"$/d" "${FZF_CONTRIB_DIR}/LINKS.txt" > "/tmp/${$}.${inode_rc%% *}"
-                    command cat "/tmp/${$}.${inode_rc%% *}" > "${FZF_CONTRIB_DIR}/LINKS.txt"
-                } && printf "Remove '%s' -> '%s'\n" "${FZF_CONTRIB_DIR}/src/${src}" "$rc" 1>&2
-        done
-    fi
+        local cmd="$1"
+        shift 1
+
+        case "$cmd" in
+        add|load|uload|reload)
+                "fzf_contrib__${cmd}" "$@"
+        ;;
+        *)
+                fzf_contrib__usage
+        esac
 }
 
-__fzf_contrib_usage () { printf '%s\n' "Usage: fzf-contrib [add | help | info | init | load | reload | uload | version ]" ; }
+fzf_contrib__prepare ()
+{
+        if
+                ! test -d "${FZF_CONTRIB_DIR}/src"
+        then
+                die 79 "dir is missing: '${FZF_CONTRIB_DIR}/src'. Initialized first?"
+        fi
 
-__fzf_contrib_version () { printf '%s\n' "$version" ; }
+        local rc
+
+        for rc in ${applications}
+        do
+                {
+                        command mkdir -p "${FZF_CONTRIB_DIR}/rc/${rc}"
+                        command printf '%s' > "${FZF_CONTRIB_DIR}/rc/${rc}/.gitkeep";
+                } &
+        done
+        wait
+
+        command printf '%s' > "${FZF_CONTRIB_DIR}/rc/.gitkeep";
+}
+
+fzf_contrib__reload ()
+if
+        test -d "${FZF_CONTRIB_DIR}/.git" &&
+        GIT_DIR="${FZF_CONTRIB_DIR}/.git" \
+        GIT_WORK_TREE="$FZF_CONTRIB_DIR" \
+                command git rev-parse --git-dir 1>/dev/null 2>&1;
+then
+        if
+                ! test -f "${FZF_CONTRIB_DIR}/LINKS.txt"
+        then
+                die 87 "LINKS.txt file missing: '${FZF_CONTRIB_DIR}/LINKS.txt'"
+        fi
+        fzf_contrib__unload_all
+        local line
+        #. "${FZF_CONTRIB_DIR}/LINKS.txt"
+        while
+                IFS= read -r line
+        do
+                msg "Invoking '${line}'"
+                ${line}
+        done < "${FZF_CONTRIB_DIR}/LINKS.txt"
+else
+        die 84 "not a git repository/worktree: '${FZF_CONTRIB_DIR}'"
+fi
+
+fzf_contrib__unload_all ()
+{
+        command find -H "${FZF_CONTRIB_DIR}/rc" -type f -links +1 -print \
+        | {
+                while
+                        IFS= read -r rc
+                do
+                        msg "Removing '${rc}'"
+                        command rm -f "$rc" || :;
+                done
+        }
+}
+
+fzf_contrib__uload ()
+{
+        if
+                test "$#" -eq 0
+        then
+                msg "Removing '${FZF_CONTRIB_DIR}/LINKS.txt'"
+                command rm -f "${FZF_CONTRIB_DIR}/LINKS.txt" || :;
+                fzf_contrib__unload_all
+                return "$?"
+        fi
+
+        local \
+                apps= \
+                arg \
+                inode_src="$(command ls -i "${FZF_CONTRIB_DIR}/src/${1:? argument missing}")" \
+                rc \
+                src="${1:? argument missing}";
+
+        read -r inode_src _ <<IN
+${inode_src}
+IN
+
+        for arg
+        do
+                case "$arg" in
+                a=?*) apps="${arg#a=}"
+                esac
+                shift 1
+        done
+
+        if
+                test -n "$apps"
+        then
+                for rc in $(IFS=, ; printf '%s ' ${apps})
+                do
+                        command find -H "${FZF_CONTRIB_DIR}/rc/${rc}" -type f -links +1 -print \
+                        | {
+                                while
+                                        IFS= read -r rcc
+                                do
+                                        inode_rc="$(command ls -i "$rcc")"
+                                        read -r inode_rc _ <<IN
+${inode_rc}
+IN
+                                        if
+                                                test "$inode_src" -eq "$inode_rc"
+                                        then
+                                                msg "Removing '${rcc}'; is hardlink from '${FZF_CONTRIB_DIR}/src/${src}'"
+                                                command rm "$rcc" || :;
+                                                command ed -s "${FZF_CONTRIB_DIR}/LINKS.txt" <<S
+g/^.* \"\${GIT_DIR}[/]rc.[^/]*[/]${rcc##*/}\"\$/d
+w
+S
+                                        else
+                                                msg "Skipping '${rc}'"
+                                        fi
+                                done
+                        }
+                done
+        else
+                command find -H "${FZF_CONTRIB_DIR}/rc" -type f -links +1 -print \
+                | {
+                        while
+                                IFS= read -r rc
+                        do
+                                inode_rc="$(command ls -i "$rc")"
+                                read -r inode_rc _ <<IN
+${inode_rc}
+IN
+                                if
+                                        test "$inode_src" -eq "$inode_rc"
+                                then
+                                        msg "Removing '${rc}'; is hardlink from '${FZF_CONTRIB_DIR}/src/${src}'"
+                                        command rm -f "$rc" || :;
+                                        command ed -s "${FZF_CONTRIB_DIR}/LINKS.txt" <<S
+g/^.* \"\${GIT_DIR}[/]rc.[^/]*[/]${rc##*/}\"\$/d
+w
+S
+                                else
+                                        msg "Skipping '${rc}'"
+                                fi
+                        done
+                }
+        fi
+}
+
+fzf_contrib__usage ()
+(
+        set -- add help info init load reload uload version
+        IFS='|'
+        printf 'Usage: fzf-contrib [%s]\n' "${*}"
+)
 
 # -- MAIN.
 
-__fzf_contrib_main "$@"
+fzf_contrib__main "$@"
+
+# vim: set ts=8 sw=8 tw=0 et :
